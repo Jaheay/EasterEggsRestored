@@ -1,6 +1,6 @@
-# Easter Egg Restored
+# Easter Eggs Restored
 
-This package contains source and config for the EasterEggRestored runtime PQSCity mover. It restores selected stock PQSCity easter eggs that are buried, displaced, or removed by terrain changes.
+This package contains source and config for the EasterEggsRestored runtime PQSCity mover. It restores selected stock PQSCity easter eggs that are buried, displaced, or removed by terrain changes.
 
 It currently targets three stock static city objects:
 
@@ -27,7 +27,7 @@ Config is loaded from `GameDatabase` after ModuleManager has filtered the `EASTE
 
 ```powershell
 & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" `
-  .\Source\EasterEggRestored.csproj `
+  .\Source\EasterEggsRestored.csproj `
   /p:Configuration=Release `
   /p:KspRoot="C:\Tools\Steam\steamapps\common\Kerbal Space Program"
 ```

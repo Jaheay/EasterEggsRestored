@@ -5,12 +5,12 @@ using System.Linq;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace EasterEggRestored
+namespace EasterEggsRestored
 {
     [KSPAddon(KSPAddon.Startup.MainMenu, true)]
-    public sealed class EasterEggRestoredBehaviour : MonoBehaviour
+    public sealed class EasterEggsRestoredBehaviour : MonoBehaviour
     {
-        private const string LogPrefix = "[EasterEggRestored] ";
+        private const string LogPrefix = "[EasterEggsRestored] ";
 
         private readonly List<StaticRestore> restores = new List<StaticRestore>();
         private float nextAttemptTime;
@@ -344,7 +344,7 @@ namespace EasterEggRestored
             restore.CityName = GetString(node, "city", "");
             if (string.IsNullOrEmpty(restore.BodyName) || string.IsNullOrEmpty(restore.CityName))
             {
-                Debug.LogWarning("[EasterEggRestored] STATIC_RESTORE missing body or city; skipping node.");
+                Debug.LogWarning("[EasterEggsRestored] STATIC_RESTORE missing body or city; skipping node.");
                 return false;
             }
 
