@@ -1,0 +1,7 @@
+Easter Egg Restored 1.0.0
+
+- Restores Vallhenge to a visible surface position on Vall.
+- Restores the Eeloo Snowkerbal when OPM or OuterPlanetsMod is installed.
+- Restores the Dres red sports car when Proxima's Better Dres is installed.
+- Recreates the Dres red sports car static if Better Dres removes the original PQSCity from Dres.
+- Uses ModuleManager :NEEDS gates for planet-pack compatibility.
