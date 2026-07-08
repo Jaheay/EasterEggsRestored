@@ -7,6 +7,7 @@ It currently targets three stock static city objects:
 - Vall / Icehenge: restored to the nearby flat site, with `reorientFinalAngle = 0`.
 - Dres / Anniversary6: restored under `BetterDres` by cloning the stock PQSCity if BetterDres removed it.
 - Eeloo / Anniversary3: restored under `OPM/OuterPlanetsMod`.
+- Tekto / Anniversary7: restored under `OPM` by moving the copied Laythe whale skeleton to a better nearby site.
 
 ## Included Configs
 
@@ -20,6 +21,10 @@ It currently targets three stock static city objects:
 - `Eeloo_Snowkerbal_OPM.cfg`
   - `:NEEDS[OPM|OuterPlanetsMod]`
   - Restores Eeloo / Anniversary3.
+
+- `Tekto_WhaleSkeleton_OPM.cfg`
+  - `:NEEDS[OPM]`
+  - Restores Tekto / Anniversary7.
 
 Config is loaded from `GameDatabase` after ModuleManager has filtered the `EASTER_EGG_RESTORED` nodes.
 
