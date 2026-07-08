@@ -81,7 +81,14 @@ namespace EasterEggRestored
                     StaticRestore restore;
                     if (StaticRestore.TryParse(nodes[i], out restore))
                     {
-                        restores.Add(restore);
+                        if (restore.RequirementsMet())
+                        {
+                            restores.Add(restore);
+                        }
+                        else
+                        {
+                            Debug.Log(LogPrefix + "Skipping " + restore.Label + ": folder requirements not met.");
+                        }
                     }
                 }
             }
@@ -267,6 +274,8 @@ namespace EasterEggRestored
         public Vector3 ReorientInitialUp;
         public float ReorientFinalAngle;
         public bool ApplyAllMatches;
+        public List<string> NeedsAllFolders = new List<string>();
+        public List<string> NeedsAnyFolders = new List<string>();
         public bool Applied;
 
         public string Label
@@ -295,12 +304,72 @@ namespace EasterEggRestored
             restore.ReorientInitialUp = GetVector3(node, "reorientInitialUp", Vector3.up);
             restore.ReorientFinalAngle = GetFloat(node, "reorientFinalAngle", 0f);
             restore.ApplyAllMatches = GetBool(node, "applyAllMatches", true);
+            restore.NeedsAllFolders = GetStringList(node, "needsFolder");
+            restore.NeedsAnyFolders = GetStringList(node, "needsAnyFolder");
             return true;
+        }
+
+        public bool RequirementsMet()
+        {
+            for (int i = 0; i < NeedsAllFolders.Count; i++)
+            {
+                if (!GameDataFolderExists(NeedsAllFolders[i]))
+                    return false;
+            }
+
+            if (NeedsAnyFolders.Count > 0)
+            {
+                bool foundAny = false;
+                for (int i = 0; i < NeedsAnyFolders.Count; i++)
+                {
+                    if (GameDataFolderExists(NeedsAnyFolders[i]))
+                    {
+                        foundAny = true;
+                        break;
+                    }
+                }
+
+                if (!foundAny)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool GameDataFolderExists(string folderName)
+        {
+            if (string.IsNullOrEmpty(folderName))
+                return true;
+
+            string relative = folderName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            string path = Path.Combine(KSPUtil.ApplicationRootPath, "GameData", relative);
+            return Directory.Exists(path);
         }
 
         private static string GetString(ConfigNode node, string key, string defaultValue)
         {
             return node.HasValue(key) ? node.GetValue(key) : defaultValue;
+        }
+
+        private static List<string> GetStringList(ConfigNode node, string key)
+        {
+            List<string> values = new List<string>();
+            if (!node.HasValue(key))
+                return values;
+
+            string[] rawValues = node.GetValues(key);
+            for (int i = 0; i < rawValues.Length; i++)
+            {
+                string[] parts = rawValues[i].Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                for (int j = 0; j < parts.Length; j++)
+                {
+                    string value = parts[j].Trim();
+                    if (value.Length > 0)
+                        values.Add(value);
+                }
+            }
+
+            return values;
         }
 
         private static bool GetBool(ConfigNode node, string key, bool defaultValue)
