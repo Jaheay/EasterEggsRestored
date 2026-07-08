@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace EasterEggRestored
 {
@@ -99,14 +100,14 @@ namespace EasterEggRestored
                 {
                     BodyName = "Vall",
                     CityName = "Icehenge",
-                    RepositionRadial = new Vector3(16296.905786f, -261481.564573f, 149552.426329f),
-                    RepositionRadiusOffset = 1668.901232,
+                    RepositionRadial = new Vector3(16129.197899f, -261440.043327f, 149606.476913f),
+                    RepositionRadiusOffset = 1650.700669,
                     RepositionToSphere = true,
                     RepositionToSphereSurface = false,
                     RepositionToSphereSurfaceAddHeight = false,
                     ReorientToSphere = true,
                     ReorientInitialUp = Vector3.up,
-                    ReorientFinalAngle = 190f,
+                    ReorientFinalAngle = 356.402195f,
                     ApplyAllMatches = true
                 });
             }
@@ -167,9 +168,16 @@ namespace EasterEggRestored
                 return false;
             }
 
-            PQSCity[] matches = body.pqsController.GetComponentsInChildren<PQSCity>(true)
-                .Where(c => string.Equals(c.name, restore.CityName, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
+            PQSCity[] matches = FindCitiesOnBody(body, restore.CityName);
+
+            if (matches.Length == 0 && restore.CloneIfMissing)
+            {
+                PQSCity clone = TryCloneMissingCity(body, restore);
+                if (clone != null)
+                {
+                    matches = new[] { clone };
+                }
+            }
 
             if (matches.Length == 0)
             {
@@ -185,6 +193,85 @@ namespace EasterEggRestored
 
             restore.Applied = true;
             return true;
+        }
+
+        private static PQSCity[] FindCitiesOnBody(CelestialBody body, string cityName)
+        {
+            return body.pqsController.GetComponentsInChildren<PQSCity>(true)
+                .Where(c => string.Equals(c.name, cityName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
+
+        private PQSCity TryCloneMissingCity(CelestialBody targetBody, StaticRestore restore)
+        {
+            PQSCity source = FindSourceCityForClone(targetBody, restore);
+            if (source == null)
+            {
+                LogWaiting(restore, "source PQSCity for clone not found");
+                return null;
+            }
+
+            try
+            {
+                GameObject cloneObject = Object.Instantiate(source.gameObject);
+                cloneObject.name = source.gameObject.name;
+                cloneObject.transform.parent = targetBody.pqsController.transform;
+                cloneObject.transform.localPosition = source.transform.localPosition;
+                cloneObject.transform.localRotation = source.transform.localRotation;
+                cloneObject.transform.localScale = source.transform.localScale;
+                cloneObject.SetActive(true);
+
+                PQSCity clone = cloneObject.GetComponent<PQSCity>() ?? cloneObject.GetComponentInChildren<PQSCity>(true);
+                if (clone == null)
+                {
+                    Object.Destroy(cloneObject);
+                    Debug.LogWarning(LogPrefix + "Clone created no PQSCity for " + restore.Label + ".");
+                    return null;
+                }
+
+                clone.name = restore.CityName;
+                clone.sphere = targetBody.pqsController;
+                clone.transform.parent = targetBody.pqsController.transform;
+
+                Debug.Log(LogPrefix + "Cloned missing " + restore.Label +
+                    " from sourceBody=" + SafeCityBodyName(source) +
+                    " sourceCity=" + source.name +
+                    " sourceGameObject=" + source.gameObject.name + ".");
+
+                return clone;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(LogPrefix + "Clone failed for " + restore.Label + ": " + ex);
+                return null;
+            }
+        }
+
+        private PQSCity FindSourceCityForClone(CelestialBody targetBody, StaticRestore restore)
+        {
+            string sourceCityName = string.IsNullOrEmpty(restore.CloneSourceCity) ? restore.CityName : restore.CloneSourceCity;
+            string sourceBodyName = string.IsNullOrEmpty(restore.CloneSourceBody) ? restore.BodyName : restore.CloneSourceBody;
+
+            PQSCity[] candidates = Resources.FindObjectsOfTypeAll<PQSCity>()
+                .Where(c => string.Equals(c.name, sourceCityName, StringComparison.OrdinalIgnoreCase))
+                .Where(c => c != null && c.gameObject != null)
+                .Where(c => c.transform == null || !c.transform.IsChildOf(targetBody.pqsController.transform))
+                .ToArray();
+
+            if (candidates.Length == 0)
+                return null;
+
+            PQSCity bodyMatch = candidates.FirstOrDefault(c =>
+                string.Equals(SafeCityBodyName(c), sourceBodyName, StringComparison.OrdinalIgnoreCase));
+
+            if (bodyMatch != null)
+                return bodyMatch;
+
+            Debug.Log(LogPrefix + "No exact source body match for " + restore.Label +
+                " sourceBody=" + sourceBodyName +
+                "; using first matching city from body=" + SafeCityBodyName(candidates[0]) + ".");
+
+            return candidates[0];
         }
 
         private void ApplyToCity(CelestialBody body, PQSCity city, StaticRestore restore, int matchIndex, int matchCount)
@@ -228,6 +315,8 @@ namespace EasterEggRestored
                 Debug.LogWarning(LogPrefix + "CheckLocals failed for " + restore.Label + ": " + ex.Message);
             }
 
+            ApplyTransformAdjustments(city, restore);
+
             try
             {
                 body.pqsController.RebuildSphere();
@@ -247,6 +336,28 @@ namespace EasterEggRestored
                 " transformWorld=" + FormatVector(city.transform.position));
         }
 
+        private static void ApplyTransformAdjustments(PQSCity city, StaticRestore restore)
+        {
+            if (restore.HasTiltUpVector)
+            {
+                Vector3 desiredUp = restore.TiltUpVector.normalized;
+                if (desiredUp.sqrMagnitude > 0.0001f)
+                {
+                    Vector3 currentUp = city.transform.localRotation * Vector3.up;
+                    if (currentUp.sqrMagnitude > 0.0001f)
+                    {
+                        Quaternion delta = Quaternion.FromToRotation(currentUp.normalized, desiredUp);
+                        city.transform.localRotation = delta * city.transform.localRotation;
+                    }
+                }
+            }
+
+            if (restore.HasPostLocalEuler)
+            {
+                city.transform.localRotation = city.transform.localRotation * Quaternion.Euler(restore.PostLocalEuler);
+            }
+        }
+
         private void LogWaiting(StaticRestore restore, string reason)
         {
             if (attemptCount <= 10 || attemptCount % 10 == 0)
@@ -258,6 +369,32 @@ namespace EasterEggRestored
             return v.x.ToString("R", CultureInfo.InvariantCulture) + "," +
                    v.y.ToString("R", CultureInfo.InvariantCulture) + "," +
                    v.z.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        private static string SafeCityBodyName(PQSCity city)
+        {
+            if (city == null)
+                return "";
+
+            try
+            {
+                if (city.celestialBody != null && !string.IsNullOrEmpty(city.celestialBody.bodyName))
+                    return city.celestialBody.bodyName;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (city.sphere != null && !string.IsNullOrEmpty(city.sphere.name))
+                    return city.sphere.name;
+            }
+            catch
+            {
+            }
+
+            return "";
         }
     }
 
@@ -274,6 +411,13 @@ namespace EasterEggRestored
         public Vector3 ReorientInitialUp;
         public float ReorientFinalAngle;
         public bool ApplyAllMatches;
+        public bool CloneIfMissing;
+        public string CloneSourceBody;
+        public string CloneSourceCity;
+        public bool HasTiltUpVector;
+        public Vector3 TiltUpVector;
+        public bool HasPostLocalEuler;
+        public Vector3 PostLocalEuler;
         public List<string> NeedsAllFolders = new List<string>();
         public List<string> NeedsAnyFolders = new List<string>();
         public bool Applied;
@@ -304,6 +448,13 @@ namespace EasterEggRestored
             restore.ReorientInitialUp = GetVector3(node, "reorientInitialUp", Vector3.up);
             restore.ReorientFinalAngle = GetFloat(node, "reorientFinalAngle", 0f);
             restore.ApplyAllMatches = GetBool(node, "applyAllMatches", true);
+            restore.CloneIfMissing = GetBool(node, "cloneIfMissing", false);
+            restore.CloneSourceBody = GetString(node, "cloneSourceBody", "");
+            restore.CloneSourceCity = GetString(node, "cloneSourceCity", "");
+            restore.HasTiltUpVector = node.HasValue("tiltUpVector");
+            restore.TiltUpVector = GetVector3(node, "tiltUpVector", Vector3.up);
+            restore.HasPostLocalEuler = node.HasValue("postLocalEuler");
+            restore.PostLocalEuler = GetVector3(node, "postLocalEuler", Vector3.zero);
             restore.NeedsAllFolders = GetStringList(node, "needsFolder");
             restore.NeedsAnyFolders = GetStringList(node, "needsAnyFolder");
             return true;
