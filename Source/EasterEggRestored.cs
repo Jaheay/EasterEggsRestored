@@ -197,8 +197,8 @@ namespace EasterEggRestored
             string sourceBodyName = string.IsNullOrEmpty(restore.CloneSourceBody) ? restore.BodyName : restore.CloneSourceBody;
 
             PQSCity[] candidates = Resources.FindObjectsOfTypeAll<PQSCity>()
-                .Where(c => string.Equals(c.name, sourceCityName, StringComparison.OrdinalIgnoreCase))
                 .Where(c => c != null && c.gameObject != null)
+                .Where(c => string.Equals(c.name, sourceCityName, StringComparison.OrdinalIgnoreCase))
                 .Where(c => c.transform == null || !c.transform.IsChildOf(targetBody.pqsController.transform))
                 .ToArray();
 
@@ -211,10 +211,12 @@ namespace EasterEggRestored
             if (bodyMatch != null)
                 return bodyMatch;
 
+            PQSCity fallback = candidates[0];
             Debug.LogWarning(LogPrefix + "No exact source body match for " + restore.Label +
-                " sourceBody=" + sourceBodyName + ".");
+                " sourceBody=" + sourceBodyName +
+                "; using first matching city=" + fallback.name + ".");
 
-            return null;
+            return fallback;
         }
 
         private void ApplyToCity(CelestialBody body, PQSCity city, StaticRestore restore, int matchIndex, int matchCount)
@@ -318,95 +320,95 @@ namespace EasterEggRestored
     }
 
     internal sealed class StaticRestore
+    {
+        public string BodyName;
+        public string CityName;
+        public Vector3 RepositionRadial;
+        public double RepositionRadiusOffset;
+        public float ReorientFinalAngle;
+        public bool CloneIfMissing;
+        public string CloneSourceBody;
+        public string CloneSourceCity;
+        public bool Applied;
+
+        public string Label
         {
-            public string BodyName;
-            public string CityName;
-            public Vector3 RepositionRadial;
-            public double RepositionRadiusOffset;
-            public float ReorientFinalAngle;
-            public bool CloneIfMissing;
-            public string CloneSourceBody;
-            public string CloneSourceCity;
-            public bool Applied;
+            get { return BodyName + "/" + CityName; }
+        }
 
-            public string Label
+        public static bool TryParse(ConfigNode node, out StaticRestore restore)
+        {
+            restore = new StaticRestore();
+
+            restore.BodyName = GetString(node, "body", "");
+            restore.CityName = GetString(node, "city", "");
+            if (string.IsNullOrEmpty(restore.BodyName) || string.IsNullOrEmpty(restore.CityName))
             {
-                get { return BodyName + "/" + CityName; }
+                Debug.LogWarning("[EasterEggRestored] STATIC_RESTORE missing body or city; skipping node.");
+                return false;
             }
 
-            public static bool TryParse(ConfigNode node, out StaticRestore restore)
-            {
-                restore = new StaticRestore();
+            restore.RepositionRadial = GetVector3(node, "repositionRadial", Vector3.zero);
+            restore.RepositionRadiusOffset = GetDouble(node, "repositionRadiusOffset", 0.0);
+            restore.ReorientFinalAngle = GetFloat(node, "reorientFinalAngle", 0f);
+            restore.CloneIfMissing = GetBool(node, "cloneIfMissing", false);
+            restore.CloneSourceBody = GetString(node, "cloneSourceBody", "");
+            restore.CloneSourceCity = GetString(node, "cloneSourceCity", "");
+            return true;
+        }
 
-                restore.BodyName = GetString(node, "body", "");
-                restore.CityName = GetString(node, "city", "");
-                if (string.IsNullOrEmpty(restore.BodyName) || string.IsNullOrEmpty(restore.CityName))
-                {
-                    Debug.LogWarning("[EasterEggRestored] STATIC_RESTORE missing body or city; skipping node.");
-                    return false;
-                }
+        private static string GetString(ConfigNode node, string key, string defaultValue)
+        {
+            return node.HasValue(key) ? node.GetValue(key) : defaultValue;
+        }
 
-                restore.RepositionRadial = GetVector3(node, "repositionRadial", Vector3.zero);
-                restore.RepositionRadiusOffset = GetDouble(node, "repositionRadiusOffset", 0.0);
-                restore.ReorientFinalAngle = GetFloat(node, "reorientFinalAngle", 0f);
-                restore.CloneIfMissing = GetBool(node, "cloneIfMissing", false);
-                restore.CloneSourceBody = GetString(node, "cloneSourceBody", "");
-                restore.CloneSourceCity = GetString(node, "cloneSourceCity", "");
-                return true;
-            }
+        private static bool GetBool(ConfigNode node, string key, bool defaultValue)
+        {
+            if (!node.HasValue(key))
+                return defaultValue;
 
-            private static string GetString(ConfigNode node, string key, string defaultValue)
-            {
-                return node.HasValue(key) ? node.GetValue(key) : defaultValue;
-            }
+            bool value;
+            return bool.TryParse(node.GetValue(key), out value) ? value : defaultValue;
+        }
 
-            private static bool GetBool(ConfigNode node, string key, bool defaultValue)
-            {
-                if (!node.HasValue(key))
-                    return defaultValue;
+        private static float GetFloat(ConfigNode node, string key, float defaultValue)
+        {
+            if (!node.HasValue(key))
+                return defaultValue;
 
-                bool value;
-                return bool.TryParse(node.GetValue(key), out value) ? value : defaultValue;
-            }
+            float value;
+            return float.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
+        }
 
-            private static float GetFloat(ConfigNode node, string key, float defaultValue)
-            {
-                if (!node.HasValue(key))
-                    return defaultValue;
+        private static double GetDouble(ConfigNode node, string key, double defaultValue)
+        {
+            if (!node.HasValue(key))
+                return defaultValue;
 
-                float value;
-                return float.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
-            }
+            double value;
+            return double.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
+        }
 
-            private static double GetDouble(ConfigNode node, string key, double defaultValue)
-            {
-                if (!node.HasValue(key))
-                    return defaultValue;
+        private static Vector3 GetVector3(ConfigNode node, string key, Vector3 defaultValue)
+        {
+            if (!node.HasValue(key))
+                return defaultValue;
 
-                double value;
-                return double.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
-            }
+            string[] parts = node.GetValue(key).Split(',');
+            if (parts.Length != 3)
+                return defaultValue;
 
-            private static Vector3 GetVector3(ConfigNode node, string key, Vector3 defaultValue)
-            {
-                if (!node.HasValue(key))
-                    return defaultValue;
+            float x;
+            float y;
+            float z;
+            if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out x))
+                return defaultValue;
+            if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out y))
+                return defaultValue;
+            if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
+                return defaultValue;
 
-                string[] parts = node.GetValue(key).Split(',');
-                if (parts.Length != 3)
-                    return defaultValue;
-
-                float x;
-                float y;
-                float z;
-                if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out x))
-                    return defaultValue;
-                if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out y))
-                    return defaultValue;
-                if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
-                    return defaultValue;
-
-                return new Vector3(x, y, z);
-            }
+            return new Vector3(x, y, z);
         }
     }
+}
