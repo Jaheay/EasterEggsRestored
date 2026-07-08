@@ -40,3 +40,7 @@ GameData/EasterEggRestored/Plugins/EasterEggRestored.dll
 - `Eeloo_Snowkerbal_OPM.cfg`
   - `:NEEDS[OPM]`
   - Patches `City[Anniversary3]` on Eeloo if that stock city node still exists.
+
+## License
+
+[EasterEggsRestored](https://github.com/Jaheay/EasterEggsRestored) © 2026 by [Jaheay](https://github.com/Jaheay) is licensed under [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/)
