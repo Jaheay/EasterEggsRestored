@@ -1,3 +1,7 @@
+Easter Eggs Restored 1.0.1
+
+- Moves Tekto's Anniversary7 whale skeleton to nearby flat terrain.
+
 Easter Eggs Restored 1.0.0
 
 - Restores Vallhenge to a visible surface position on Vall.
