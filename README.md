@@ -1,46 +1,41 @@
 # Easter Egg Restored
 
-This package contains source and config for the EasterEggRestored runtime PQSCity mover.
+This package contains source and config for the EasterEggRestored runtime PQSCity mover. It restores selected stock PQSCity easter eggs that are buried, displaced, or removed by terrain changes.
 
 It currently targets three stock static city objects:
 
-- Vall / Icehenge: Vallhenge, moved to the flatter three-flag site from `quicksave-new.sfs`.
-- Dres / Anniversary6 : red sports car, lifted only when `GameData/BetterDres` exists.
-- Eeloo / Anniversary3:  Snowkerbal, lifted only when `GameData/OPM` or `GameData/OuterPlanetsMod` exists.
+- Vall / Icehenge: restored to the nearby flat site, with `reorientFinalAngle = 0`.
+- Dres / Anniversary6: restored under `BetterDres` by cloning the stock PQSCity if BetterDres removed it.
+- Eeloo / Anniversary3: restored under `OPM/OuterPlanetsMod`.
 
-Current rule:
-
-- Vall / Icehenge: moves Vallhenge upward to the surveyed Kertrey marker position.
-
-## Build
-
-Compile `Source/EasterEggRestored.csproj` against your KSP install:
-
-```powershell
-msbuild .\Source\EasterEggRestored.csproj /p:Configuration=Release /p:KspRoot="C:\Tools\Steam\steamapps\common\Kerbal Space Program"
-```
-
-The output DLL goes to:
-
-```text
-GameData/EasterEggRestored/Plugins/EasterEggRestored.dll
-```
-
-## Included patches
+## Included Configs
 
 - `Vall_Icehenge_Restore.cfg`
-  - Patches `City[Icehenge]` on Vall.
-  - Moves/lifts Vallhenge to the surface
+  - Restores Vall / Icehenge.
 
 - `Dres_RedCar_BetterDres.cfg`
   - `:NEEDS[BetterDres]`
-  - Patches `City[Anniversary6]` on Dres if that stock city node still exists.
-  - Moves/Lifts the car to better dres height
+  - Restores Dres / Anniversary6 by cloning the stock PQSCity if BetterDres removed it.
 
 - `Eeloo_Snowkerbal_OPM.cfg`
-  - `:NEEDS[OPM]`
-  - Patches `City[Anniversary3]` on Eeloo if that stock city node still exists.
+  - `:NEEDS[OPM|OuterPlanetsMod]`
+  - Restores Eeloo / Anniversary3.
+
+Config is loaded from `GameDatabase` after ModuleManager has filtered the `EASTER_EGG_RESTORED` nodes.
+
+## Build
+
+```powershell
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" `
+  .\Source\EasterEggRestored.csproj `
+  /p:Configuration=Release `
+  /p:KspRoot="C:\Tools\Steam\steamapps\common\Kerbal Space Program"
+```
 
 ## License
 
 [EasterEggsRestored](https://github.com/Jaheay/EasterEggsRestored) © 2026 by [Jaheay](https://github.com/Jaheay) is licensed under [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/)
+
+## AI Disclosure
+
+AI was used in the development of this mod. The mod was reviewed by a human at every step.

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -12,31 +11,20 @@ namespace EasterEggRestored
     public sealed class EasterEggRestoredBehaviour : MonoBehaviour
     {
         private const string LogPrefix = "[EasterEggRestored] ";
-        private const string SettingsPath = "GameData/EasterEggRestored/PluginData/EasterEggRestored.cfg";
 
         private readonly List<StaticRestore> restores = new List<StaticRestore>();
         private float nextAttemptTime;
         private int attemptCount;
-        private bool loaded;
 
         public void Start()
         {
             DontDestroyOnLoad(this);
             LoadSettings();
-            GameEvents.onLevelWasLoadedGUIReady.Add(OnLevelReady);
             nextAttemptTime = 0f;
-        }
-
-        public void OnDestroy()
-        {
-            GameEvents.onLevelWasLoadedGUIReady.Remove(OnLevelReady);
         }
 
         public void Update()
         {
-            if (!loaded)
-                return;
-
             if (Time.realtimeSinceStartup < nextAttemptTime)
                 return;
 
@@ -44,76 +32,33 @@ namespace EasterEggRestored
             TryApplyAll();
         }
 
-        private void OnLevelReady(GameScenes scene)
-        {
-            nextAttemptTime = 0f;
-        }
-
         private void LoadSettings()
         {
             restores.Clear();
 
-            string path = Path.Combine(KSPUtil.ApplicationRootPath, SettingsPath.Replace('/', Path.DirectorySeparatorChar));
-            ConfigNode root = null;
+            ConfigNode[] roots = GameDatabase.Instance != null
+                ? GameDatabase.Instance.GetConfigNodes("EASTER_EGG_RESTORED")
+                : new ConfigNode[0];
 
-            if (File.Exists(path))
+            for (int r = 0; r < roots.Length; r++)
             {
-                try
-                {
-                    root = ConfigNode.Load(path);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError(LogPrefix + "Could not load settings file: " + path + " :: " + ex);
-                }
-            }
-            else
-            {
-                Debug.LogWarning(LogPrefix + "Settings file not found, using built-in Vall/Icehenge default: " + path);
-            }
-
-            if (root != null)
-            {
-                ConfigNode config = root.GetNode("EASTER_EGG_RESTORED") ?? root;
-                ConfigNode[] nodes = config.GetNodes("STATIC_RESTORE");
-
+                ConfigNode[] nodes = roots[r].GetNodes("STATIC_RESTORE");
                 for (int i = 0; i < nodes.Length; i++)
                 {
                     StaticRestore restore;
                     if (StaticRestore.TryParse(nodes[i], out restore))
-                    {
-                        if (restore.RequirementsMet())
-                        {
-                            restores.Add(restore);
-                        }
-                        else
-                        {
-                            Debug.Log(LogPrefix + "Skipping " + restore.Label + ": folder requirements not met.");
-                        }
-                    }
+                        restores.Add(restore);
                 }
             }
 
             if (restores.Count == 0)
             {
-                restores.Add(new StaticRestore
-                {
-                    BodyName = "Vall",
-                    CityName = "Icehenge",
-                    RepositionRadial = new Vector3(16129.197899f, -261440.043327f, 149606.476913f),
-                    RepositionRadiusOffset = 1650.700669,
-                    RepositionToSphere = true,
-                    RepositionToSphereSurface = false,
-                    RepositionToSphereSurfaceAddHeight = false,
-                    ReorientToSphere = true,
-                    ReorientInitialUp = Vector3.up,
-                    ReorientFinalAngle = 356.402195f,
-                    ApplyAllMatches = true
-                });
+                Debug.LogWarning(LogPrefix + "No STATIC_RESTORE rules found in GameDatabase.");
             }
-
-            loaded = true;
-            Debug.Log(LogPrefix + "Loaded " + restores.Count + " static restore rule(s).");
+            else
+            {
+                Debug.Log(LogPrefix + "Loaded " + restores.Count + " static restore rule(s) from GameDatabase.");
+            }
         }
 
         private void TryApplyAll()
@@ -185,8 +130,7 @@ namespace EasterEggRestored
                 return false;
             }
 
-            int count = restore.ApplyAllMatches ? matches.Length : 1;
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < matches.Length; i++)
             {
                 ApplyToCity(body, matches[i], restore, i, matches.Length);
             }
@@ -267,11 +211,10 @@ namespace EasterEggRestored
             if (bodyMatch != null)
                 return bodyMatch;
 
-            Debug.Log(LogPrefix + "No exact source body match for " + restore.Label +
-                " sourceBody=" + sourceBodyName +
-                "; using first matching city from body=" + SafeCityBodyName(candidates[0]) + ".");
+            Debug.LogWarning(LogPrefix + "No exact source body match for " + restore.Label +
+                " sourceBody=" + sourceBodyName + ".");
 
-            return candidates[0];
+            return null;
         }
 
         private void ApplyToCity(CelestialBody body, PQSCity city, StaticRestore restore, int matchIndex, int matchCount)
@@ -281,11 +224,11 @@ namespace EasterEggRestored
 
             city.repositionRadial = restore.RepositionRadial;
             city.repositionRadiusOffset = restore.RepositionRadiusOffset;
-            city.repositionToSphere = restore.RepositionToSphere;
-            city.repositionToSphereSurface = restore.RepositionToSphereSurface;
-            city.repositionToSphereSurfaceAddHeight = restore.RepositionToSphereSurfaceAddHeight;
-            city.reorientToSphere = restore.ReorientToSphere;
-            city.reorientInitialUp = restore.ReorientInitialUp;
+            city.repositionToSphere = true;
+            city.repositionToSphereSurface = false;
+            city.repositionToSphereSurfaceAddHeight = false;
+            city.reorientToSphere = true;
+            city.reorientInitialUp = Vector3.up;
             city.reorientFinalAngle = restore.ReorientFinalAngle;
 
             try
@@ -315,8 +258,6 @@ namespace EasterEggRestored
                 Debug.LogWarning(LogPrefix + "CheckLocals failed for " + restore.Label + ": " + ex.Message);
             }
 
-            ApplyTransformAdjustments(city, restore);
-
             try
             {
                 body.pqsController.RebuildSphere();
@@ -334,28 +275,6 @@ namespace EasterEggRestored
                 " newOffset=" + city.repositionRadiusOffset.ToString("R", CultureInfo.InvariantCulture) +
                 " transformLocal=" + FormatVector(city.transform.localPosition) +
                 " transformWorld=" + FormatVector(city.transform.position));
-        }
-
-        private static void ApplyTransformAdjustments(PQSCity city, StaticRestore restore)
-        {
-            if (restore.HasTiltUpVector)
-            {
-                Vector3 desiredUp = restore.TiltUpVector.normalized;
-                if (desiredUp.sqrMagnitude > 0.0001f)
-                {
-                    Vector3 currentUp = city.transform.localRotation * Vector3.up;
-                    if (currentUp.sqrMagnitude > 0.0001f)
-                    {
-                        Quaternion delta = Quaternion.FromToRotation(currentUp.normalized, desiredUp);
-                        city.transform.localRotation = delta * city.transform.localRotation;
-                    }
-                }
-            }
-
-            if (restore.HasPostLocalEuler)
-            {
-                city.transform.localRotation = city.transform.localRotation * Quaternion.Euler(restore.PostLocalEuler);
-            }
         }
 
         private void LogWaiting(StaticRestore restore, string reason)
@@ -399,177 +318,95 @@ namespace EasterEggRestored
     }
 
     internal sealed class StaticRestore
-    {
-        public string BodyName;
-        public string CityName;
-        public Vector3 RepositionRadial;
-        public double RepositionRadiusOffset;
-        public bool RepositionToSphere;
-        public bool RepositionToSphereSurface;
-        public bool RepositionToSphereSurfaceAddHeight;
-        public bool ReorientToSphere;
-        public Vector3 ReorientInitialUp;
-        public float ReorientFinalAngle;
-        public bool ApplyAllMatches;
-        public bool CloneIfMissing;
-        public string CloneSourceBody;
-        public string CloneSourceCity;
-        public bool HasTiltUpVector;
-        public Vector3 TiltUpVector;
-        public bool HasPostLocalEuler;
-        public Vector3 PostLocalEuler;
-        public List<string> NeedsAllFolders = new List<string>();
-        public List<string> NeedsAnyFolders = new List<string>();
-        public bool Applied;
-
-        public string Label
         {
-            get { return BodyName + "/" + CityName; }
-        }
+            public string BodyName;
+            public string CityName;
+            public Vector3 RepositionRadial;
+            public double RepositionRadiusOffset;
+            public float ReorientFinalAngle;
+            public bool CloneIfMissing;
+            public string CloneSourceBody;
+            public string CloneSourceCity;
+            public bool Applied;
 
-        public static bool TryParse(ConfigNode node, out StaticRestore restore)
-        {
-            restore = new StaticRestore();
-
-            restore.BodyName = GetString(node, "body", "");
-            restore.CityName = GetString(node, "city", "");
-            if (string.IsNullOrEmpty(restore.BodyName) || string.IsNullOrEmpty(restore.CityName))
+            public string Label
             {
-                Debug.LogWarning("[EasterEggRestored] STATIC_RESTORE missing body or city; skipping node.");
-                return false;
+                get { return BodyName + "/" + CityName; }
             }
 
-            restore.RepositionRadial = GetVector3(node, "repositionRadial", Vector3.zero);
-            restore.RepositionRadiusOffset = GetDouble(node, "repositionRadiusOffset", 0.0);
-            restore.RepositionToSphere = GetBool(node, "repositionToSphere", true);
-            restore.RepositionToSphereSurface = GetBool(node, "repositionToSphereSurface", false);
-            restore.RepositionToSphereSurfaceAddHeight = GetBool(node, "repositionToSphereSurfaceAddHeight", false);
-            restore.ReorientToSphere = GetBool(node, "reorientToSphere", true);
-            restore.ReorientInitialUp = GetVector3(node, "reorientInitialUp", Vector3.up);
-            restore.ReorientFinalAngle = GetFloat(node, "reorientFinalAngle", 0f);
-            restore.ApplyAllMatches = GetBool(node, "applyAllMatches", true);
-            restore.CloneIfMissing = GetBool(node, "cloneIfMissing", false);
-            restore.CloneSourceBody = GetString(node, "cloneSourceBody", "");
-            restore.CloneSourceCity = GetString(node, "cloneSourceCity", "");
-            restore.HasTiltUpVector = node.HasValue("tiltUpVector");
-            restore.TiltUpVector = GetVector3(node, "tiltUpVector", Vector3.up);
-            restore.HasPostLocalEuler = node.HasValue("postLocalEuler");
-            restore.PostLocalEuler = GetVector3(node, "postLocalEuler", Vector3.zero);
-            restore.NeedsAllFolders = GetStringList(node, "needsFolder");
-            restore.NeedsAnyFolders = GetStringList(node, "needsAnyFolder");
-            return true;
-        }
-
-        public bool RequirementsMet()
-        {
-            for (int i = 0; i < NeedsAllFolders.Count; i++)
+            public static bool TryParse(ConfigNode node, out StaticRestore restore)
             {
-                if (!GameDataFolderExists(NeedsAllFolders[i]))
-                    return false;
-            }
+                restore = new StaticRestore();
 
-            if (NeedsAnyFolders.Count > 0)
-            {
-                bool foundAny = false;
-                for (int i = 0; i < NeedsAnyFolders.Count; i++)
+                restore.BodyName = GetString(node, "body", "");
+                restore.CityName = GetString(node, "city", "");
+                if (string.IsNullOrEmpty(restore.BodyName) || string.IsNullOrEmpty(restore.CityName))
                 {
-                    if (GameDataFolderExists(NeedsAnyFolders[i]))
-                    {
-                        foundAny = true;
-                        break;
-                    }
+                    Debug.LogWarning("[EasterEggRestored] STATIC_RESTORE missing body or city; skipping node.");
+                    return false;
                 }
 
-                if (!foundAny)
-                    return false;
-            }
-
-            return true;
-        }
-
-        private static bool GameDataFolderExists(string folderName)
-        {
-            if (string.IsNullOrEmpty(folderName))
+                restore.RepositionRadial = GetVector3(node, "repositionRadial", Vector3.zero);
+                restore.RepositionRadiusOffset = GetDouble(node, "repositionRadiusOffset", 0.0);
+                restore.ReorientFinalAngle = GetFloat(node, "reorientFinalAngle", 0f);
+                restore.CloneIfMissing = GetBool(node, "cloneIfMissing", false);
+                restore.CloneSourceBody = GetString(node, "cloneSourceBody", "");
+                restore.CloneSourceCity = GetString(node, "cloneSourceCity", "");
                 return true;
-
-            string relative = folderName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-            string path = Path.Combine(KSPUtil.ApplicationRootPath, "GameData", relative);
-            return Directory.Exists(path);
-        }
-
-        private static string GetString(ConfigNode node, string key, string defaultValue)
-        {
-            return node.HasValue(key) ? node.GetValue(key) : defaultValue;
-        }
-
-        private static List<string> GetStringList(ConfigNode node, string key)
-        {
-            List<string> values = new List<string>();
-            if (!node.HasValue(key))
-                return values;
-
-            string[] rawValues = node.GetValues(key);
-            for (int i = 0; i < rawValues.Length; i++)
-            {
-                string[] parts = rawValues[i].Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-                for (int j = 0; j < parts.Length; j++)
-                {
-                    string value = parts[j].Trim();
-                    if (value.Length > 0)
-                        values.Add(value);
-                }
             }
 
-            return values;
-        }
+            private static string GetString(ConfigNode node, string key, string defaultValue)
+            {
+                return node.HasValue(key) ? node.GetValue(key) : defaultValue;
+            }
 
-        private static bool GetBool(ConfigNode node, string key, bool defaultValue)
-        {
-            if (!node.HasValue(key))
-                return defaultValue;
+            private static bool GetBool(ConfigNode node, string key, bool defaultValue)
+            {
+                if (!node.HasValue(key))
+                    return defaultValue;
 
-            bool value;
-            return bool.TryParse(node.GetValue(key), out value) ? value : defaultValue;
-        }
+                bool value;
+                return bool.TryParse(node.GetValue(key), out value) ? value : defaultValue;
+            }
 
-        private static float GetFloat(ConfigNode node, string key, float defaultValue)
-        {
-            if (!node.HasValue(key))
-                return defaultValue;
+            private static float GetFloat(ConfigNode node, string key, float defaultValue)
+            {
+                if (!node.HasValue(key))
+                    return defaultValue;
 
-            float value;
-            return float.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
-        }
+                float value;
+                return float.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
+            }
 
-        private static double GetDouble(ConfigNode node, string key, double defaultValue)
-        {
-            if (!node.HasValue(key))
-                return defaultValue;
+            private static double GetDouble(ConfigNode node, string key, double defaultValue)
+            {
+                if (!node.HasValue(key))
+                    return defaultValue;
 
-            double value;
-            return double.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
-        }
+                double value;
+                return double.TryParse(node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : defaultValue;
+            }
 
-        private static Vector3 GetVector3(ConfigNode node, string key, Vector3 defaultValue)
-        {
-            if (!node.HasValue(key))
-                return defaultValue;
+            private static Vector3 GetVector3(ConfigNode node, string key, Vector3 defaultValue)
+            {
+                if (!node.HasValue(key))
+                    return defaultValue;
 
-            string[] parts = node.GetValue(key).Split(',');
-            if (parts.Length != 3)
-                return defaultValue;
+                string[] parts = node.GetValue(key).Split(',');
+                if (parts.Length != 3)
+                    return defaultValue;
 
-            float x;
-            float y;
-            float z;
-            if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out x))
-                return defaultValue;
-            if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out y))
-                return defaultValue;
-            if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
-                return defaultValue;
+                float x;
+                float y;
+                float z;
+                if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out x))
+                    return defaultValue;
+                if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out y))
+                    return defaultValue;
+                if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
+                    return defaultValue;
 
-            return new Vector3(x, y, z);
+                return new Vector3(x, y, z);
+            }
         }
     }
-}
